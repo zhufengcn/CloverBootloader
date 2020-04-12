@@ -4,10 +4,8 @@
 # github version
 
 # Linux users should be able to use this wrapper, although the following are needed:
-# gcc         (check for ./build_gcc8.sh or newer)
-# python      (sudo apt-get install python)
-# uuid-dev    (sudo apt-get install uuid-dev)
-# git         (sudo apt-get install git)
+# (Ubuntu alike)
+# sudo apt-get install build-essential uuid-dev iasl git gcc-9 nasm python3-distutils
 
 # $1 argument override MYTOOLCHAIN variable, in case you want GCC53 for example
 
@@ -132,7 +130,7 @@ fi
 buildClover() {
 checkTools
 
-# to force recreation of the Conf folder. You can sill use a custom CONF_PATH if you don't want recreation.
+# to force recreation of the Conf folder. You can still use a custom CONF_PATH if you don't want recreation.
 rm -rf "$CLOVERROOT"/Conf
 mkdir "$CLOVERROOT"/Conf
 
@@ -201,8 +199,13 @@ fi
 }
 
 buildApp() {
+local withClover=${1-"none"}
 if [[ "$SYSNAME" == Darwin ]]; then
   if [[ -f "${CLOVERROOT}"/CloverPackage/CloverV2/EFI/CLOVER/CLOVERX64.efi ]]; then
+    rm -f "${CLOVERROOT}"/CloverPackage/sym/.withV2
+    if [[ $withClover == withV2 ]]; then
+      touch "${CLOVERROOT}"/CloverPackage/sym/.withV2
+    fi
     cd "${CLOVERROOT}"/CloverApp
     echo "[BUILD APP]"
     checkXCODE
@@ -212,7 +215,7 @@ if [[ "$SYSNAME" == Darwin ]]; then
     sleep 3
   fi
 else
-  echo && echo "can't build pkg on a non Darwin OS!"
+  echo && echo "Clover.app can only be built in macOS!"
 fi
 }
 
@@ -258,7 +261,7 @@ if [[ -d .git ]]; then
   lsha1=$(git rev-parse --short HEAD)
 fi
 
-echo "buildme, Clover v2.5k r$(git describe --tags $(git rev-list --tags --max-count=1﻿)) (SHA: $lsha1)"
+echo "buildme, Clover r$(git describe --tags $(git rev-list --tags --max-count=1﻿)) (SHA: $lsha1)"
 echo "TOOLCHAIN: $MYTOOLCHAIN (override example: './buildme XCODE8')"
 echo
 PS3='Please enter your choice: '
@@ -266,6 +269,7 @@ options=( 'build Clover'
           'build Clover with HFSPlus'
           'make pkg'
           'make app'
+          'make app (with Clover)'
           'make iso'
           'build all'
           'test build (no autogen, no boot files)'
@@ -294,6 +298,10 @@ do
     ;;
     "make app")
       buildApp
+      break
+    ;;
+    "make app (with Clover)")
+      buildApp withV2
       break
     ;;
     "make iso")

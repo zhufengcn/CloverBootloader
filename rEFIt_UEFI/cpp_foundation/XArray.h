@@ -181,7 +181,7 @@ void XArray<TYPE>::CheckSize(xsize nNewSize, xsize nGrowBy)
 		nNewSize += nGrowBy;
 		m_data = (TYPE *)realloc((void *)m_data, nNewSize * sizeof(TYPE), m_allocatedSize * sizeof(TYPE) );
 		if ( !m_data ) {
-			DebugLog(2, "XArray<TYPE>::CheckSize(nNewSize=%llu, nGrowBy=%llu) : Xrealloc(%llu, %llu, %llu) returned NULL. System halted\n", nNewSize, nGrowBy, m_allocatedSize, nNewSize*sizeof(TYPE), (uintptr_t)m_data);
+			DebugLog(2, "XArray<TYPE>::CheckSize(nNewSize=%llu, nGrowBy=%llu) : Xrealloc(%llu, %llu, %" PRIuPTR ") returned NULL. System halted\n", nNewSize, nGrowBy, m_allocatedSize, nNewSize*sizeof(TYPE), (uintptr_t)m_data);
 	  	panic();
 		}
 //		memset(&_Data[_Size], 0, (nNewSize-_Size) * sizeof(TYPE)); // Could help for debugging, but zeroing in not needed.
@@ -242,11 +242,11 @@ template<class TYPE>
 TYPE &XArray<TYPE>::ElementAt(int index)
 {
 //	#ifdef _DEBUG
-	    if ( index < 0 ) {
+    if ( index < 0 ) {
 			panic("XArray::ElementAt(int) -> Operator [] : index < 0");
 		}
 		if ( (unsigned int)index >= m_len ) { // cast safe, index > 0
-			DebugLog(2, "XArray::ElementAt(xsize) -> Operator [] : index > m_len");
+			DebugLog(2, "XArray::ElementAt(int) -> Operator [] : index > m_len");
 			panic();
 		}
 //	#endif
@@ -258,11 +258,11 @@ template<class TYPE>
 const TYPE& XArray<TYPE>::ElementAt(int index) const
 {
 //	#ifdef _DEBUG
-	    if ( index < 0 ) {
+    if ( index < 0 ) {
 			panic("XArray::ElementAt(int) const -> Operator [] : index < 0");
 		}
 		if ( (unsigned int)index >= m_len ) { // cast ok as index > 0. Ideally cast would be like '(unsigned __typeof__(index))'
-			DebugLog(2, "XArray::ElementAt(xsize) const -> Operator [] : index > m_len");
+			DebugLog(2, "XArray::ElementAt(int) const -> Operator [] : index > m_len");
 			panic();
 		}
 //	#endif

@@ -94,7 +94,7 @@ DECLARE_EMB_EXTERN_WITH_SIZE(emb_radio_button)
 DECLARE_EMB_EXTERN_WITH_SIZE(emb_checkbox)
 DECLARE_EMB_EXTERN_WITH_SIZE(emb_checkbox_checked)
 
-DECLARE_EMB_EXTERN_WITH_SIZE(emb_dark_font_data)
+//DECLARE_EMB_EXTERN_WITH_SIZE(emb_dark_font_data) //not exists
 //DECLARE_EMB_EXTERN_WITH_SIZE(emb_dark_pointer)
 DECLARE_EMB_EXTERN_WITH_SIZE(emb_dark_func_about)
 DECLARE_EMB_EXTERN_WITH_SIZE(emb_dark_func_clover)
@@ -180,13 +180,6 @@ EG_IMAGE * egDecodePNG(IN const UINT8 *FileData, IN UINTN FileDataLength, IN BOO
 
 
 //VOID egEncodeBMP(IN EG_IMAGE *Image, OUT UINT8 **FileData, OUT UINTN *FileDataLength);
-
-#if USE_XTHEME
-INTN egRenderText(IN const XStringW& Text, OUT XImage* CompImage,
-                  IN INTN PosX, IN INTN PosY, IN INTN Cursor, INTN textType);
-#else
-INTN egRenderText(IN CONST CHAR16 *Text, IN OUT EG_IMAGE *CompImage, IN INTN PosX, IN INTN PosY, IN INTN Cursor, INTN textType);
-#endif
 
 
 #endif /* __LIBEG_LIBEGINT_H__ */

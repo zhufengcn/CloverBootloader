@@ -59,12 +59,8 @@ CHAR16           *SelfDirPath;
 EFI_DEVICE_PATH  *SelfDevicePath;
 EFI_DEVICE_PATH  *SelfFullDevicePath;
 
-#if USE_XTHEME
 XTheme ThemeX;
 
-#else
-EFI_FILE         *ThemeDir = NULL; //it is XTheme member
-#endif
 CHAR16           *ThemePath;
 BOOLEAN          gThemeChanged = FALSE;
 //BOOLEAN          gBootArgsChanged = FALSE;
@@ -244,17 +240,10 @@ VOID UninitRefitLib(VOID)
     OEMDir->Close(OEMDir);
     OEMDir = NULL;
   }
-#if USE_XTHEME
   if (ThemeX.ThemeDir != NULL) {
     ThemeX.ThemeDir->Close(ThemeX.ThemeDir);
     ThemeX.ThemeDir = NULL;
   }
-#else
-  if (ThemeDir != NULL) {
-    ThemeDir->Close(ThemeDir);
-    ThemeDir = NULL;
-  }
-#endif
 
 
   if (SelfRootDir != NULL) {
@@ -309,11 +298,7 @@ EFI_STATUS ReinitSelfLib(VOID)
     return EFI_NOT_FOUND;
   }
   SelfDeviceHandle = NewSelfHandle;
-#if USE_XTHEME
   /*Status = */SelfRootDir->Open(SelfRootDir, &ThemeX.ThemeDir, ThemePath, EFI_FILE_MODE_READ, 0);
-#else
-  /*Status = */SelfRootDir->Open(SelfRootDir, &ThemeDir, ThemePath, EFI_FILE_MODE_READ, 0);
-#endif
 
 
   /*Status = */SelfRootDir->Open(SelfRootDir, &OEMDir, OEMPath, EFI_FILE_MODE_READ, 0);
@@ -336,17 +321,12 @@ EFI_STATUS FinishInitRefitLib(VOID)
       return EFI_LOAD_ERROR;
     }
   }
-#if USE_XTHEME
   /*Status = */SelfRootDir->Open(SelfRootDir, &ThemeX.ThemeDir, ThemePath, EFI_FILE_MODE_READ, 0);
-#else
-  /*Status = */SelfRootDir->Open(SelfRootDir, &ThemeDir, ThemePath, EFI_FILE_MODE_READ, 0);
-#endif
   /*Status = */SelfRootDir->Open(SelfRootDir, &OEMDir, OEMPath, EFI_FILE_MODE_READ, 0);
   Status = SelfRootDir->Open(SelfRootDir, &SelfDir, SelfDirPath, EFI_FILE_MODE_READ, 0);
   CheckFatalError(Status, L"while opening our installation directory");
   return Status;
 }
-#if USE_XTHEME
 BOOLEAN IsEmbeddedTheme()
 {
   if (ThemeX.embedded) {
@@ -354,66 +334,14 @@ BOOLEAN IsEmbeddedTheme()
   }
   return ThemeX.ThemeDir == NULL;
 }
-#else
-BOOLEAN IsEmbeddedTheme()
-{
-  if (!GlobalConfig.Theme || !StriCmp(GlobalConfig.Theme, L"embedded")) {
-    ThemeDir = NULL;
-  }
-  return ThemeDir == NULL;
-}
-#endif
 
 
-//
-// list functions
-//
-//
-//VOID CreateList(OUT VOID ***ListPtr, OUT UINTN *ElementCount, IN UINTN InitialElementCount)
-//{
-//  UINTN AllocateCount;
-//
-//  *ElementCount = InitialElementCount;
-//  if (*ElementCount > 0) {
-//    AllocateCount = (*ElementCount + 7) & ~7;   // next multiple of 8
-//    *ListPtr = (__typeof_am__(*ListPtr))AllocatePool(sizeof(VOID *) * AllocateCount);
-//  } else {
-//    *ListPtr = NULL;
-//  }
-//}
-//
-//VOID AddListElement(IN OUT VOID ***ListPtr, IN OUT UINTN *ElementCount, IN VOID *NewElement)
-//{
-//  UINTN AllocateCount;
-//
-//  if ((*ElementCount & 7) == 0) {
-//    AllocateCount = *ElementCount + 8;
-//    if (*ElementCount == 0)
-//      *ListPtr = (__typeof_am__(*ListPtr))AllocatePool(sizeof(VOID *) * AllocateCount);
-//    else
-//      *ListPtr = (__typeof_am__(*ListPtr))EfiReallocatePool((VOID *)*ListPtr, sizeof(VOID *) * (*ElementCount), sizeof(VOID *) * AllocateCount);
-//  }
-//  (*ListPtr)[*ElementCount] = NewElement;
-//  (*ElementCount)++;
-//}
-/*
-VOID FreeList(IN OUT VOID ***ListPtr, IN OUT UINTN *ElementCount)
-{
-  UINTN i;
-  
-  if (*ElementCount > 0) {
-    for (i = 0; i < *ElementCount; i++) {
-      // TODO: call a user-provided routine for each element here
-      FreePool((*ListPtr)[i]);
-    }
-    FreePool(*ListPtr);
-  }
-}
-*/
+
 //
 // firmware device path discovery
 //
 
+//looks like not used anywhere
 static UINT8 LegacyLoaderMediaPathData[] = {
   0x04, 0x06, 0x14, 0x00, 0xEB, 0x85, 0x05, 0x2B,
   0xB8, 0xD8, 0xA9, 0x49, 0x8B, 0x8C, 0xE2, 0x1B,
@@ -650,7 +578,7 @@ static VOID ScanVolumeBootcode(IN OUT REFIT_VOLUME *Volume, OUT BOOLEAN *Bootabl
                   *((UINT16 *)(SectorBuffer + 510)) == 0xaa55) ||
                  FindMem(SectorBuffer, 2048, "Starting the BTX loader", 23) >= 0) {
         Volume->HasBootCode = TRUE;
-        Volume->LegacyOS->IconName = L"freebsd";
+        Volume->LegacyOS->IconName = L"freebsd,linux";
         Volume->LegacyOS->Name = L"FreeBSD";
         Volume->LegacyOS->Type = OSTYPE_VAR;
         Volume->BootType = BOOTING_BY_PBR;
@@ -659,7 +587,7 @@ static VOID ScanVolumeBootcode(IN OUT REFIT_VOLUME *Volume, OUT BOOLEAN *Bootabl
       } else if (FindMem(SectorBuffer, 512, "!Loading", 8) >= 0 ||
                  FindMem(SectorBuffer, 2048, "/cdboot\0/CDBOOT\0", 16) >= 0) {
         Volume->HasBootCode = TRUE;
-        Volume->LegacyOS->IconName = L"openbsd";
+        Volume->LegacyOS->IconName = L"openbsd,linux";
         Volume->LegacyOS->Name = L"OpenBSD";
         Volume->LegacyOS->Type = OSTYPE_VAR;
         Volume->BootType = BOOTING_BY_PBR;
@@ -667,7 +595,7 @@ static VOID ScanVolumeBootcode(IN OUT REFIT_VOLUME *Volume, OUT BOOLEAN *Bootabl
       } else if (FindMem(SectorBuffer, 512, "Not a bootxx image", 18) >= 0 ||
                  *((UINT32 *)(SectorBuffer + 1028)) == 0x7886b6d1) {
         Volume->HasBootCode = TRUE;
-        Volume->LegacyOS->IconName = L"netbsd";
+        Volume->LegacyOS->IconName = L"netbsd,linux";
         Volume->LegacyOS->Name = L"NetBSD";
         Volume->LegacyOS->Type = OSTYPE_VAR;
         Volume->BootType = BOOTING_BY_PBR;
@@ -690,7 +618,7 @@ static VOID ScanVolumeBootcode(IN OUT REFIT_VOLUME *Volume, OUT BOOLEAN *Bootabl
       } else if (FindMem(SectorBuffer, 512, "CPUBOOT SYS", 11) >= 0 ||
                  FindMem(SectorBuffer, 512, "KERNEL  SYS", 11) >= 0) {
         Volume->HasBootCode = TRUE;
-        Volume->LegacyOS->IconName = L"freedos";
+        Volume->LegacyOS->IconName = L"freedos,win";
         Volume->LegacyOS->Name = L"FreeDOS";
         Volume->LegacyOS->Type = OSTYPE_VAR;
         Volume->BootType = BOOTING_BY_PBR;

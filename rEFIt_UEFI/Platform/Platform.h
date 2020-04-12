@@ -17,6 +17,8 @@ Headers collection for procedures
 extern "C" {
 #endif
 
+#include <Library/printf_lite.h>
+
 #include <Uefi.h>
 
 #include <Guid/Acpi.h>
@@ -34,6 +36,7 @@ extern "C" {
 #include <Library/HdaModels.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/PcdLib.h>
+#include <Library/PrintLib.h>
 #include <Library/PerformanceLib.h>
 #include <Library/PeCoffGetEntryPointLib.h>
 #include <Library/TimerLib.h>
@@ -90,12 +93,12 @@ extern "C" {
 #ifdef __cplusplus
 #include "../cpp_foundation/XString.h"
 #include "../cpp_foundation/XStringW.h"
-#include "../cpp_foundation/XStringWP.h"
 #include "../cpp_foundation/XArray.h"
 #include "../cpp_foundation/XObjArray.h"
 #include "../cpp_util/remove_ref.h"
 #endif
 
+#include "../libeg/BmLib.h"
 #include "BootLog.h"
 #include "BasicIO.h"
 #include "../refit/lib.h"
@@ -247,7 +250,9 @@ extern "C" {
 #define CPU_MODEL_ATOM_TM       0x86  /* Tremont */
 #define CPU_MODEL_KABYLAKE1     0x8E  /* Kabylake Mobile */
 #define CPU_MODEL_KABYLAKE2     0x9E  /* Kabylake Dektop, CoffeeLake */
-#define CPU_MODEL_COMETLAKE     0xA6
+#define CPU_MODEL_COMETLAKE_S   0x9F  /* desktop Comet Lake */
+#define CPU_MODEL_COMETLAKE_Y   0xA5  /* aka 10th generation Amber Lake Y */
+#define CPU_MODEL_COMETLAKE_U   0xA6
 
 #define CPU_VENDOR_INTEL        0x756E6547
 #define CPU_VENDOR_AMD          0x68747541
@@ -809,25 +814,16 @@ typedef struct CUSTOM_LOADER_ENTRY CUSTOM_LOADER_ENTRY;
 struct CUSTOM_LOADER_ENTRY {
   CUSTOM_LOADER_ENTRY     *Next;
   CUSTOM_LOADER_ENTRY     *SubEntries;
-#if USE_XTHEME
   XImage                  Image;
   XImage                  DriveImage;
-#else
-  EG_IMAGE                *Image;
-  EG_IMAGE                *DriveImage;
-#endif
   CONST CHAR16            *ImagePath;
   CONST CHAR16            *DriveImagePath;
   CONST CHAR16            *Volume;
   CONST CHAR16            *Path;
   XString                  Options;
-#if USE_XTHEME
+
   XStringW FullTitle;
   XStringW Title;
-#else
-  CONST CHAR16            *FullTitle;
-  CONST CHAR16            *Title;
-#endif
   CONST CHAR16            *Settings;
   CHAR16                  Hotkey;
   BOOLEAN                 CommonSettings;
@@ -836,23 +832,13 @@ struct CUSTOM_LOADER_ENTRY {
   UINT8                   VolumeType;
   UINT8                   KernelScan;
   UINT8                   CustomBoot;
-  EG_IMAGE                *CustomLogo;
-#if USE_XTHEME
+  XImage                  CustomLogo;
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL BootBgColor;
-#else
-  EG_PIXEL         *BootBgColor; //why it is array? It is one value!
-#endif
   KERNEL_AND_KEXT_PATCHES KernelAndKextPatches;
 
-#if USE_XTHEME
   CUSTOM_LOADER_ENTRY() : Next(0), SubEntries(0), ImagePath(0), DriveImagePath(0), Volume(0), Path(0), Settings(0), Hotkey(0), CommonSettings(0), Flags(0), Type(0), VolumeType(0),
-                          KernelScan(0), CustomBoot(0), CustomLogo(0), BootBgColor({0,0,0,0})
+                          KernelScan(0), CustomBoot(0), BootBgColor({0,0,0,0})
 						{ memset(&KernelAndKextPatches, 0, sizeof(KernelAndKextPatches)); }
-#else
-  CUSTOM_LOADER_ENTRY() : Next(0), SubEntries(0), Image(0), DriveImage(0), ImagePath(0), DriveImagePath(0), Volume(0), Path(0), FullTitle(0), Title(0), Settings(0), Hotkey(0), CommonSettings(0), Flags(0), Type(0), VolumeType(0),
-                          KernelScan(0), CustomBoot(0), CustomLogo(0), BootBgColor(0)
-					    { memset(&KernelAndKextPatches, 0, sizeof(KernelAndKextPatches)); }
-#endif
 
   // Not sure if default are valid. Delete them. If needed, proper ones can be created
   CUSTOM_LOADER_ENTRY(const CUSTOM_LOADER_ENTRY&) = delete;
@@ -863,23 +849,13 @@ struct CUSTOM_LOADER_ENTRY {
 typedef struct CUSTOM_LEGACY_ENTRY CUSTOM_LEGACY_ENTRY;
 struct CUSTOM_LEGACY_ENTRY {
   CUSTOM_LEGACY_ENTRY   *Next;
-#if USE_XTHEME
   XImage                Image;
   XImage                DriveImage;
-#else
-  EG_IMAGE              *Image;
-  EG_IMAGE              *DriveImage;
-#endif
   CONST CHAR16          *ImagePath;
   CONST CHAR16          *DriveImagePath;
   CONST CHAR16          *Volume;
-#if USE_XTHEME
   XStringW              FullTitle;
   XStringW              Title;
-#else
-  CONST CHAR16          *FullTitle;
-  CONST CHAR16          *Title;
-#endif
   CHAR16              Hotkey;
   UINT8               Flags;
   UINT8               Type;
@@ -889,22 +865,13 @@ struct CUSTOM_LEGACY_ENTRY {
 typedef struct CUSTOM_TOOL_ENTRY CUSTOM_TOOL_ENTRY;
 struct CUSTOM_TOOL_ENTRY {
   CUSTOM_TOOL_ENTRY *Next;
-#if USE_XTHEME
   XImage            Image;
-#else
-  EG_IMAGE          *Image;
-#endif
   CHAR16            *ImagePath;
   CHAR16            *Volume;
   CHAR16            *Path;
   XString           Options;
-#if USE_XTHEME
   XStringW          FullTitle;
   XStringW          Title;
-#else
-  CONST CHAR16      *FullTitle;
-  CONST CHAR16      *Title;
-#endif
   CHAR16            Hotkey;
   UINT8             Flags;
   UINT8             VolumeType;
@@ -1200,7 +1167,7 @@ typedef struct {
 
 //  UINT8                   pad7[6];
   UINT8                   CustomBoot;
-  EG_IMAGE                *CustomLogo;
+  XImage                  *CustomLogo;
 
   UINT32                  RefCLK;
 
@@ -1420,6 +1387,7 @@ typedef enum {
   MacBookAir72,
   MacBookAir81,
   MacBookAir82,
+  MacBookAir91,
   MacMini11,
   MacMini21,
   MacMini31,

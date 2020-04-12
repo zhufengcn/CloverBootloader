@@ -46,18 +46,8 @@ extern REFIT_MENU_SCREEN MainMenu;
 
 extern XObjArray<REFIT_VOLUME> Volumes;
 // common
-EG_IMAGE *LoadBuiltinIcon(IN CONST CHAR16 *IconName);
-EG_IMAGE * ScanVolumeDefaultIcon(REFIT_VOLUME *Volume, IN UINT8 OSType, IN EFI_DEVICE_PATH_PROTOCOL *DevicePath);
-/*
-INTN StrniCmp(IN CHAR16 *Str1,
-              IN CHAR16 *Str2,
-              IN UINTN   Count);
-CHAR16 *StriStr(IN CHAR16 *Str,
-                IN CHAR16 *SearchFor);
-VOID StrToLower(IN CHAR16 *Str);
-VOID AlertMessage(IN CHAR16 *Title, IN CHAR16 *Message);
-BOOLEAN YesNoMessage(IN CHAR16 *Title, IN CHAR16 *Message);
- */
+const XImage& ScanVolumeDefaultIcon(REFIT_VOLUME *Volume, IN UINT8 OSType, IN EFI_DEVICE_PATH_PROTOCOL *DevicePath);
+
 
 // Ask user for file path from directory menu
 BOOLEAN AskUserForFilePathFromDir(IN CHAR16 *Title OPTIONAL, IN REFIT_VOLUME *Volume,
@@ -82,7 +72,7 @@ VOID ScanTool(VOID);
 VOID AddCustomTool(VOID);
 
 // locked graphics
-CONST CHAR16 *CustomBootModeToStr(IN UINT8 Mode);
+CONST CHAR8 *CustomBootModeToStr(IN UINT8 Mode);
 EFI_STATUS LockBootScreen(VOID);
 EFI_STATUS UnlockBootScreen(VOID);
 

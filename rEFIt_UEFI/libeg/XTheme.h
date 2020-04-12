@@ -19,12 +19,13 @@ public:
   XImage Image;
   XImage ImageNight;
 
-  Icon(INTN Id);
+  Icon(INTN Id, bool Embedded = false);
   ~Icon();
 
   // Default are not valid, as usual. We delete them. If needed, proper ones can be created
   Icon(const Icon&) = delete;
   Icon& operator=(const Icon&) = delete;
+  void GetEmbedded();
 };
 
 class XTheme
@@ -76,8 +77,8 @@ public:
   BOOLEAN     embedded;
   BOOLEAN     DarkEmbedded;
   BOOLEAN     TypeSVG;
-  INTN        Codepage;
-  INTN        CodepageSize;
+//  INTN        Codepage;  //no! it is global settings
+//  INTN        CodepageSize;
   float       Scale;
   float       CentreShift;
   INTN        row0TileSize;
@@ -93,6 +94,10 @@ public:
   INTN        ScrollBarDecorationsHeight;
   INTN        ScrollScrollDecorationsHeight;
 
+
+  INTN  FontWidth;
+  INTN  FontHeight;
+  INTN  TextHeight;
 
   BOOLEAN     Daylight;
 
@@ -110,21 +115,38 @@ public:
   XImage  UpButtonImage;
   XImage  DownButtonImage;
 
+  XImage  FontImage;
+
   EG_RECT  BannerPlace;
 
   //fill the theme
 //  const XImage& GetIcon(const char* Name);
 //  const XImage& GetIcon(const CHAR16* Name);
-  const XImage& GetIcon(const XString& Name) const;  //get by name
-  const XImage& GetIcon(INTN Id) const; //get by id
+  const XImage& GetIcon(const XString& Name);  //get by name
+  const XImage& GetIcon(INTN Id); //get by id
+  const XImage& GetIconAlt(INTN Id, INTN Alt); //if id not found
+  const XImage& LoadOSIcon(const CHAR16* OSIconName); //TODO make XString provider
+  const XImage& LoadOSIcon(const XString& Full);
+
+  //fonts
+  void LoadFontImage(IN BOOLEAN UseEmbedded, IN INTN Rows, IN INTN Cols);
+  void PrepareFont();
+  INTN GetEmpty(const XImage& Buffer, const EFI_GRAPHICS_OUTPUT_BLT_PIXEL& FirstPixel, INTN Start, INTN Step);
+  INTN RenderText(IN const XStringW& Text, OUT XImage* CompImage_ptr,
+                    IN INTN PosX, IN INTN PosY, IN INTN Cursor, INTN textType, float textScale = 0.f);
+  //overload for UTF8 text
+  INTN RenderText(IN const XString& Text, OUT XImage* CompImage_ptr,
+                          IN INTN PosX, IN INTN PosY, IN INTN Cursor, INTN textType, float textScale = 0.f);
+  VOID MeasureText(IN const XStringW& Text, OUT INTN *Width, OUT INTN *Height);
+
 
 //  void AddIcon(Icon& NewIcon);  //return EFI_STATUS?
   void FillByEmbedded();
   void FillByDir();
   EFI_STATUS GetThemeTagSettings(void* DictPointer);
   void parseTheme(void* p, const char** dict); //in nano project
-  EFI_STATUS ParseSVGXTheme(CONST CHAR8* buffer); // in VectorTheme
-  EFI_STATUS ParseSVGXIcon(void *p, INTN Id, const XString& IconNameX, float Scale, XImage* Image);
+  EFI_STATUS ParseSVGXTheme(const CHAR8* buffer); // in VectorTheme
+  EFI_STATUS ParseSVGXIcon(void *p, INTN Id, const XString& IconNameX, XImage* Image);
   void* LoadTheme(const CHAR16 *TestTheme); //return TagPtr why?
 
   //screen operations

@@ -312,9 +312,16 @@ VOID GetCPUProperties (VOID)
       case CPU_MODEL_ATOM_X3:
       case CPU_MODEL_SKYLAKE_D:
       case CPU_MODEL_SKYLAKE_S:
-      case CPU_MODEL_CANNONLAKE:
       case CPU_MODEL_KABYLAKE1:
       case CPU_MODEL_KABYLAKE2:
+      case CPU_MODEL_CANNONLAKE:
+      case CPU_MODEL_ICELAKE_A:
+      case CPU_MODEL_ICELAKE_C:
+      case CPU_MODEL_ICELAKE_D:
+      case CPU_MODEL_ICELAKE:
+      case CPU_MODEL_COMETLAKE_S:
+      case CPU_MODEL_COMETLAKE_Y:
+      case CPU_MODEL_COMETLAKE_U:
         msr = AsmReadMsr64(MSR_CORE_THREAD_COUNT);  //0x35
 			DBG("MSR 0x35    %16llX\n", msr);
         gCPUStructure.Cores   = (UINT8)bitfield((UINT32)msr, 31, 16);
@@ -490,6 +497,13 @@ VOID GetCPUProperties (VOID)
            case CPU_MODEL_KABYLAKE1:
            case CPU_MODEL_KABYLAKE2:
            case CPU_MODEL_CANNONLAKE:
+           case CPU_MODEL_ICELAKE_A:
+           case CPU_MODEL_ICELAKE_C:
+           case CPU_MODEL_ICELAKE_D:
+           case CPU_MODEL_ICELAKE:
+           case CPU_MODEL_COMETLAKE_S:
+           case CPU_MODEL_COMETLAKE_Y:
+           case CPU_MODEL_COMETLAKE_U:
              gCPUStructure.TSCFrequency = MultU64x32(gCPUStructure.CurrentSpeed, Mega); //MHz -> Hz
              gCPUStructure.CPUFrequency = gCPUStructure.TSCFrequency;
              
@@ -508,7 +522,7 @@ VOID GetCPUProperties (VOID)
              //   MsgLog("MSR 0xE4              %08X\n", msr);
              //------------
              msr = AsmReadMsr64(MSR_PLATFORM_INFO);       //0xCE
-				 MsgLog("MSR 0xCE              %08llX_%08llX\n", (msr>>32), msr);
+				 MsgLog("MSR 0xCE              %08llX_%08llX\n", (msr>>32), msr & 0xFFFFFFFFull);
              gCPUStructure.MaxRatio = (UINT8)RShiftU64(msr, 8) & 0xff;
              gCPUStructure.MinRatio = (UINT8)MultU64x32(RShiftU64(msr, 40) & 0xff, 10);
              //--- Check if EIST locked
@@ -1130,7 +1144,7 @@ VOID GetCPUProperties (VOID)
 //  DBG("Family/ExtFamily: 0x%X/0x%X\n", gCPUStructure.Family, gCPUStructure.Extfamily);
   DBG("MaxDiv/MinDiv: %d.%d/%d\n", gCPUStructure.MaxRatio/10, gCPUStructure.MaxRatio%10 , gCPUStructure.MinRatio/10);
   DBG("Turbo: %d/%d/%d/%d\n", gCPUStructure.Turbo4/10, gCPUStructure.Turbo3/10, gCPUStructure.Turbo2/10, gCPUStructure.Turbo1/10);
-	DBG("Features: 0x%08llX\n",gCPUStructure.Features);
+	DBG("Features: 0x%llX\n",gCPUStructure.Features);
   DBG("Threads: %d\n",gCPUStructure.Threads);
   DBG("Cores: %d\n",gCPUStructure.Cores);
   DBG("FSB: %d MHz\n", (INT32)(DivU64x32(gCPUStructure.FSBFrequency, Mega)));
@@ -1155,7 +1169,7 @@ VOID SetCPUProperties (VOID)
       msr = gSettings.SavingMode;
       AsmWriteMsr64(IA32_ENERGY_PERF_BIAS, msr);
       msr = AsmReadMsr64(IA32_ENERGY_PERF_BIAS); //0x1B0
-		MsgLog("MSR 0x1B0   set to        %08llX\n", msr);
+		MsgLog("MSR 0x1B0   set to        %llX\n", msr);
     }
   }
 
@@ -1361,6 +1375,14 @@ UINT16 GetAdvancedCpuType ()
           case CPU_MODEL_SKYLAKE_S:
           case CPU_MODEL_KABYLAKE1:
           case CPU_MODEL_KABYLAKE2:
+          case CPU_MODEL_CANNONLAKE:
+          case CPU_MODEL_ICELAKE_A:
+          case CPU_MODEL_ICELAKE_C:
+          case CPU_MODEL_ICELAKE_D:
+          case CPU_MODEL_ICELAKE:
+          case CPU_MODEL_COMETLAKE_S:
+          case CPU_MODEL_COMETLAKE_Y:
+          case CPU_MODEL_COMETLAKE_U:
             if (AsciiStrStr(gCPUStructure.BrandString, "Core(TM) i3"))
               return 0x905; // Core i3 - Apple doesn't use it
             if (AsciiStrStr(gCPUStructure.BrandString, "Core(TM) i5"))

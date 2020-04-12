@@ -37,10 +37,6 @@
 #ifndef __LIBEG_LIBEG_H__
 #define __LIBEG_LIBEG_H__
 
-#ifndef USE_XTHEME
-#define USE_XTHEME 0
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -312,7 +308,7 @@ typedef struct KERNEL_AND_KEXT_PATCHES
   UINT8   pad[3];
   UINT32  FakeCPUID;
   //  UINT32  align0;
-  CHAR16  *KPATIConnectorsController;
+  CHAR8   *KPATIConnectorsController;
 #if defined(MDE_CPU_IA32)
   UINT32  align1;
 #endif
@@ -495,14 +491,9 @@ VOID egFillImageArea(IN OUT EG_IMAGE *CompImage,
                      IN INTN AreaWidth, IN INTN AreaHeight,
                      IN EG_PIXEL *Color);
 VOID egComposeImage(IN OUT EG_IMAGE *CompImage, IN EG_IMAGE *TopImage, IN INTN PosX, IN INTN PosY);
-VOID PrepareFont(VOID);
-VOID egMeasureText(IN CONST CHAR16 *Text, OUT INTN *Width, OUT INTN *Height);
-#if USE_XTHEME
-VOID egClearScreen(IN const void *Color);
-#else
-VOID egClearScreen(IN EG_PIXEL *Color);
-#endif
 
+
+VOID egClearScreen(IN const void *Color);
 
 //VOID egDrawImage(IN EG_IMAGE *Image, IN INTN ScreenPosX, IN INTN ScreenPosY);
 // will be replaced by XImage.Draw(ScreenPosX, ScreenPosY, 1.f); assuming Area* = 0

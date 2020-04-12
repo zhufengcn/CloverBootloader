@@ -21,9 +21,14 @@ final class GradientView : NSView {
 }
 
 final class ThemeManagerVC: NSViewController,
-NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate {
+NSTableViewDelegate,
+NSTableViewDataSource,
+WebFrameLoadDelegate,
+WebUIDelegate,
+NSComboBoxDelegate,
+NSComboBoxDataSource {
   var targetVolume : String? = nil
-  
+  var themes : [String] = [String]()
   var manager : ThemeManager?
   @IBOutlet var installedThemesCheckBox : NSButton!
   
@@ -43,6 +48,8 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   var loaded : Bool = false
   var showInstalled : Bool = false
   
+  var isBusy : Bool = false
+  
   override func awakeFromNib() {
     super.awakeFromNib()
     if !self.loaded {
@@ -60,19 +67,10 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
     }
     self.loaded = true
     
-    /*
-    let winImagePath = "/Library/Desktop Pictures/Ink Cloud.jpg"
 
-    if fm.fileExists(atPath: winImagePath) {
-      let winImage = NSImage(byReferencingFile: winImagePath)
-      let winImageSize = NSMakeSize(self.view.frame.width, self.view.frame.height)
-      winImage?.size = winImageSize
-      self.view.window?.backgroundColor = NSColor.init(patternImage: winImage!)
-    }*/
-    
     self.view.window?.title = self.view.window!.title.locale
     let settingVC = AppSD.settingsWC?.contentViewController as? SettingsViewController
-    settingVC?.themeUserField.isEnabled = false
+    settingVC?.themeUserCBox.isEnabled = false
     settingVC?.themeRepoField.isEnabled = false
     self.webView.drawsBackground = false
     self.webView.uiDelegate = self
@@ -80,17 +78,17 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
     self.webView.frameLoadDelegate = self
     self.webView.mainFrame.frameView.allowsScrolling = false
  
-    
     localize(view: self.view)
     AppSD.isInstallerOpen = true
     settingVC?.disksPopUp.isEnabled = false
     settingVC?.updateCloverButton.isEnabled = false
     settingVC?.unmountButton.isEnabled = false
     
-    AppSD.themes.removeAll()
     self.nameBox.completes = true
+    self.nameBox.delegate = self
+    self.nameBox.dataSource = self
+    self.nameBox.usesDataSource = true
     
-    self.nameBox.removeAllItems()
     self.sidebar.delegate = self
     self.sidebar.dataSource = self
     self.sidebar.backgroundColor = NSColor.clear
@@ -117,8 +115,14 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
       }
     }
     
+    self.reloadThemes()
+  }
+  
+  func reloadThemes() {
+    self.themes.removeAll()
+    self.sidebar.reloadData()
     self.showIndexing()
-    //return
+    
     let themeManagerIndexDir = NSHomeDirectory().addPath("Library/Application Support/CloverApp/Themeindex/\(AppSD.themeUser)_\(AppSD.themeRepo)")
     
     self.manager = ThemeManager(user: AppSD.themeUser,
@@ -126,7 +130,6 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
                                 basePath: themeManagerIndexDir,
                                 indexDir: themeManagerIndexDir,
                                 delegate: self)
-    
     /*
      1) immediately load indexed themes (if any).
      Fast if thumbnails already exists.
@@ -140,7 +143,7 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
      2) download thumbnails.
      Slower if thumbnails didn't exist or themes never indexed.
      */
-
+    
     self.manager?.getThemes { (t) in
       let sorted = t.sorted()
       for t in sorted {
@@ -155,16 +158,48 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
     if showInstalled {
       return AppSD.installedThemes
     }
-    return AppSD.themes
+    return self.themes
+  }
+  
+  func numberOfItems(in comboBox: NSComboBox) -> Int {
+    return self.dataSource().count
+  }
+  
+  func comboBox(_ comboBox: NSComboBox, indexOfItemWithStringValue string: String) -> Int {
+    return self.dataSource().firstIndex(of: string) ?? -1
+  }
+  func comboBox(_ comboBox: NSComboBox, objectValueForItemAt index: Int) -> Any? {
+    return self.dataSource()[index]
+  }
+  
+  func comboBox(_ comboBox: NSComboBox, completedString string: String) -> String? {
+    for theme in dataSource() {
+      if theme.lowercased().hasPrefix(string.lowercased()) {
+        return theme
+      }
+    }
+    return nil
   }
 
+  @IBAction func refreshIndexedThemesPressed(_ sender: NSButton!) {
+    if let repoDir = self.manager?.themeManagerIndexDir {
+      // delete old index
+      if fm.fileExists(atPath: repoDir) {
+        try? fm.removeItem(atPath: repoDir)
+      }
+      // re index the repository
+      self.reloadThemes()
+    } else {
+      NSSound.beep()
+    }
+  }
+  
   @IBAction func showInstalledThemes(_ sender: NSButton!) {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
       let copy = self.manager!.getIndexedThemes().sorted() // in cases of low downloads
-      self.nameBox.removeAllItems()
       self.sidebar.noteNumberOfRowsChanged()
       AppSD.installedThemes.removeAll()
-      AppSD.themes.removeAll()
+      self.themes.removeAll()
      
       if sender.state == .on {
         if (self.targetVolume != nil && fm.fileExists(atPath: self.targetVolume!)) {
@@ -194,15 +229,13 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
             } catch { }
           }
           AppSD.installedThemes = installed.sorted()
-          self.nameBox.addItems(withObjectValues: installed.sorted())
           if installed.count == 0 {
             self.showNoThemes()
           }
         }
         self.showInstalled = true
       } else {
-        AppSD.themes = copy
-        self.nameBox.addItems(withObjectValues: copy.sorted())
+        self.themes = copy
         self.showInstalled = false
         if copy.count == 0 {
           self.showNoThemes()
@@ -213,8 +246,8 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   }
   
   @IBAction func optimizeThemePressed(_ sender: NSButton!) {
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-      var success : Bool = false
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+      var beep : Bool = true
       let sr = self.sidebar.selectedRow
       if sr >= 0 {
         if let v = self.sidebar.view(atColumn: 0, row: sr, makeIfNecessary: false) as? ThemeView {
@@ -224,30 +257,54 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
               || fm.fileExists(atPath: self.targetVolume!) {
               let themePath = self.targetVolume!.addPath("EFI/CLOVER/themes").addPath(v.name)
               if fm.fileExists(atPath: themePath) {
+                beep = false
+                self.isBusy = true
                 self.spinner.startAnimation(nil)
-                var error : Error? = nil
-                self.manager?.optimizeTheme(at: themePath, err: &error)
-                if (error != nil) {
-                  NSSound(named: "Basso")?.play()
-                  let alert = NSAlert()
-                  alert.messageText = "😱"
-                  alert.informativeText = error!.localizedDescription
-                  alert.alertStyle = .critical
-                  alert.addButton(withTitle: "Ok".locale)
-                  
-                  alert.beginSheetModal(for: self.view.window!) { (reponse) in
+                self.optimizeButton.isEnabled = false
+                self.installButton.isEnabled = false
+                self.unistallButton.isEnabled = false
+                self.targetPop.isEnabled = false
+                self.nameBox.isEnabled = false
+                self.installedThemesCheckBox.isEnabled = false
+                //return
+                self.manager?.optimizeTheme(at: themePath, completion: { (error) in
+                  DispatchQueue.main.async {
+                    self.isBusy = false
+                    self.spinner.stopAnimation(nil)
+                    self.optimizeButton.isEnabled = true
+                    self.installButton.isEnabled = true
+                    self.unistallButton.isEnabled = true
+                    self.targetPop.isEnabled = true
+                    self.nameBox.isEnabled = true
+                    self.installedThemesCheckBox.isEnabled = true
                   }
-                  return
-                }
-                self.spinner.stopAnimation(nil)
-                success = true
+                  if (error != nil) {
+                    DispatchQueue.main.async {
+                      NSSound(named: "Basso")?.play()
+                      let alert = NSAlert()
+                      alert.messageText = "😱"
+                      alert.informativeText = error!.localizedDescription
+                      alert.alertStyle = .critical
+                      alert.addButton(withTitle: "Ok".locale)
+                      
+                      alert.beginSheetModal(for: self.view.window!) { (reponse) in
+                      }
+                    }
+                  } else {
+                    DispatchQueue.main.async {
+                      NSSound(named: "Glass")?.play()
+                    }
+                  }
+                })
               }
             }
           }
         }
       }
-      // this sound is only when succeded and or it fail when theme is not found
-      NSSound(named: success ? "Glass" : "Basso")?.play()
+      
+      if beep {
+        NSSound.beep()
+      }
     }
   }
   
@@ -284,6 +341,7 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   }
   
   func showIndexing() {
+    self.webView.drawsBackground = true
     // https://www.w3schools.com/howto/howto_css_loader.asp
     self.webView.mainFrame.loadHTMLString("""
       <html>
@@ -340,7 +398,7 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   }
   
   @IBAction func unInstallPressed(_ sender: NSButton!) {
-    if AppSD.isInstalling {
+    if AppSD.isInstalling || self.isBusy {
       NSSound.beep()
       return
     }
@@ -380,7 +438,7 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   }
   
   @IBAction func InstallPressed(_ sender: NSButton!) {
-    if AppSD.isInstalling {
+    if AppSD.isInstalling || self.isBusy {
       NSSound.beep()
       return
     }
@@ -396,42 +454,68 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
     }
     let theme = self.nameBox.stringValue
     let themeDest = self.targetVolume!.addPath("EFI/CLOVER/themes").addPath(theme)
-    self.spinner.startAnimation(nil)
+
     let sr = self.sidebar.selectedRow
     if sr >= 0 && sr < self.dataSource().count {
+      // ---------
+      self.isBusy = true
+      self.spinner.startAnimation(nil)
+      self.optimizeButton.isEnabled = false
+      self.installButton.isEnabled = false
+      self.unistallButton.isEnabled = false
+      self.targetPop.isEnabled = false
+      self.nameBox.isEnabled = false
+      self.installedThemesCheckBox.isEnabled = false
+      // ---------
       self.manager?.download(theme: theme,
                              down: .complete,
                              completion: { (path) in
                               
-                              if let themePath = path {
-                                try? fm.removeItem(atPath: themeDest)
-                                do {
-                                  try fm.moveItem(atPath: themePath, toPath: themeDest)
-                                  NSSound(named: "Glass")?.play()
-                                } catch {
-                                  NSSound(named: "Basso")?.play()
-                                  DispatchQueue.main.async {
-                                    let alert = NSAlert()
-                                    alert.messageText = "Installation failed".locale
-                                    alert.informativeText = "\(error.localizedDescription)"
-                                    alert.addButton(withTitle: "OK")
-                                    alert.runModal()
-                                  }
-                                }
-                              } else {
+                              if self.manager?.statusError != nil {
                                 NSSound(named: "Basso")?.play()
                                 DispatchQueue.main.async {
                                   let alert = NSAlert()
                                   alert.messageText = "Installation failed".locale
-                                  alert.informativeText = "Theme \"\(theme)\" not found."
+                                  alert.informativeText = self.manager!.statusError!.localizedDescription
                                   alert.addButton(withTitle: "OK")
                                   alert.runModal()
+                                }
+                              } else {
+                                if let themePath = path {
+                                  try? fm.removeItem(atPath: themeDest)
+                                  do {
+                                    try fm.moveItem(atPath: themePath, toPath: themeDest)
+                                    NSSound(named: "Glass")?.play()
+                                  } catch {
+                                    NSSound(named: "Basso")?.play()
+                                    DispatchQueue.main.async {
+                                      let alert = NSAlert()
+                                      alert.messageText = "Installation failed".locale
+                                      alert.informativeText = "\(error.localizedDescription)"
+                                      alert.addButton(withTitle: "OK")
+                                      alert.runModal()
+                                    }
+                                  }
+                                } else {
+                                  NSSound(named: "Basso")?.play()
+                                  DispatchQueue.main.async {
+                                    let alert = NSAlert()
+                                    alert.messageText = "Installation failed".locale
+                                    alert.informativeText = "Theme \"\(theme)\" not found."
+                                    alert.addButton(withTitle: "OK")
+                                    alert.runModal()
+                                  }
                                 }
                               }
                               
                               DispatchQueue.main.async {
+                                self.isBusy = false
                                 AppSD.isInstalling = false
                                 self.spinner.stopAnimation(nil)
+                                self.targetPop.isEnabled = true
+                                self.nameBox.isEnabled = true
+                                self.installedThemesCheckBox.isEnabled = true
+                                self.onSelection()
                               }
       })
     }
@@ -439,18 +523,15 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   }
   
   func addRow(for theme: String) {
-    let index = AppSD.themes.count
-    AppSD.themes.append(theme)
-    //if self.installedThemesCheckBox.state == .off {
-      self.sidebar.beginUpdates()
-      self.sidebar.insertRows(at: IndexSet(integer: index), withAnimation: .slideUp)
-      self.sidebar.endUpdates()
-    //}
-    self.nameBox.addItem(withObjectValue: theme)
+    let index = self.themes.count
+    self.themes.append(theme)
+    self.sidebar.beginUpdates()
+    self.sidebar.insertRows(at: IndexSet(integer: index), withAnimation: .slideUp)
+    self.sidebar.endUpdates()
   }
   
   func add(theme: String) {
-    if AppSD.themes.contains(theme) {
+    if self.themes.contains(theme) {
       return
     }
     if let sha = self.manager?.getSha() {
@@ -498,12 +579,23 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
   }
   
   func tableViewSelectionDidChange(_ notification: Notification) {
+    self.webView.drawsBackground = false
+    if self.isBusy {
+      NSSound.beep()
+      return
+    }
+    self.onSelection()
+  }
+  
+  func onSelection() {
     self.isPngTheme = false
     self.optimizeButton.isEnabled = false
     self.optimizeButton.state = .off
     let sr = self.sidebar.selectedRow
+    
     if sr >= 0 {
       if let v = self.sidebar.view(atColumn: 0, row: sr, makeIfNecessary: false) as? ThemeView {
+        self.installButton.title = v.isUpToDate ? "Install".locale : "Update".locale
         if v.isInstalled {
           self.unistallButton.animator().isHidden = false
           self.unistallButton.isEnabled = true
@@ -517,7 +609,6 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
         } else {
           self.installButton.isEnabled = false
         }
-
         
         if let path = v.imagePath {
           self.nameBox.stringValue = v.name
@@ -579,6 +670,8 @@ NSTableViewDelegate, NSTableViewDataSource, WebFrameLoadDelegate, WebUIDelegate 
           v.load()
         }
       }
+    } else {
+      self.installButton.title = "Install".locale
     }
   }
   
@@ -746,7 +839,7 @@ final class ThemeManagerWC: NSWindowController, NSWindowDelegate {
     settingVC?.updateCloverButton.isEnabled = true
     settingVC?.searchESPDisks()
     AppSD.isInstallerOpen = false
-    settingVC?.themeUserField.isEnabled = true
+    settingVC?.themeUserCBox.isEnabled = true
     settingVC?.themeRepoField.isEnabled = true
     self.window = nil
     self.close()

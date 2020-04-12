@@ -1,6 +1,7 @@
 #include "XImage.h"
 #include "lodepng.h"
 #include "nanosvg.h"
+#include "libegint.h"  //for egDecodeIcns
 
 
 #ifndef DEBUG_ALL
@@ -266,35 +267,71 @@ void XImage::CopyScaled(const XImage& Image, float scale)
  */
 void XImage::Compose(INTN PosX, INTN PosY, const XImage& TopImage, bool Lowest)
 {
-  UINT32      TopAlpha;
-  UINT32      RevAlpha;
-  UINT32      FinalAlpha;
-  UINT32      CompAlpha;
-  UINT32      TempAlpha;
-  UINT32      Temp;
+  EG_RECT OutPlace;
+  OutPlace.XPos = PosX;
+  OutPlace.YPos = PosY;
+  OutPlace.Width = GetWidth();
+  OutPlace.Height = GetHeight();
+
+  EG_RECT Area;
+  Area.XPos = 0;
+  Area.YPos = 0;
+  Area.Width = TopImage.GetWidth();
+  Area.Height = TopImage.GetHeight();
+  Compose(OutPlace, Area, TopImage, Lowest, 0.f);
+}
+// TopScale is for scaling TopImage. = 0.f means no scale or = 1.f
+// InPlace is a place in TopImage before scaling
+void XImage::Compose(const EG_RECT& OutPlace, const EG_RECT& InPlace, const XImage& TopImage, bool Lowest, float TopScale)
+{
+  INTN PosX = InPlace.XPos;
+  INTN PosY = InPlace.YPos;
+  INTN WArea = InPlace.Width;
+  INTN HArea = InPlace.Height;
+  XImage Top2;
+  if (TopScale != 0.f && TopScale != 1.f) {
+    Top2.setSizeInPixels((UINTN)(TopImage.GetWidth() * TopScale), (UINTN)(TopImage.GetHeight() * TopScale));
+    Top2.CopyScaled(TopImage, TopScale);
+    PosX = (int)(PosX * TopScale);
+    PosY = (int)(PosY * TopScale);
+    WArea = (int)(WArea * TopScale);
+    HArea = (int)(HArea * TopScale);
+  }
+  const XImage& Top = (TopScale != 0.f && TopScale != 1.f) ? Top2 : TopImage;  //this is a link, not copy
+
+  //assumed Area.Width == OutPlace.Width
+  // if not choose min
+  WArea = MIN(WArea, OutPlace.Width);
+  if (OutPlace.XPos + WArea > GetWidth()) {  //coordinate in this image - OutPlace
+    WArea = GetWidth() - OutPlace.XPos;
+  }
+  HArea = MIN(HArea, OutPlace.Height);
+  if (OutPlace.YPos + HArea > GetHeight()) {
+    HArea = GetHeight() - OutPlace.YPos;
+  }
 //change only affected pixels
-  for (INTN y = PosY; y < GetHeight() && (y - PosY) < TopImage.GetHeight(); ++y) {
+  for (INTN y = 0; y < HArea && (y + PosY) < Top.GetHeight(); ++y) {
  //   EFI_GRAPHICS_OUTPUT_BLT_PIXEL& CompPtr = *GetPixelPtr(PosX, y); // I assign a ref to avoid the operator ->. Compiler will produce the same anyway.
-    EFI_GRAPHICS_OUTPUT_BLT_PIXEL* CompPtr = GetPixelPtr(PosX, y);
-    for (INTN x = PosX; x < GetWidth() && (x - PosX) < TopImage.GetWidth(); ++x) {
+    EFI_GRAPHICS_OUTPUT_BLT_PIXEL* CompPtr = GetPixelPtr(OutPlace.XPos, OutPlace.YPos + y);
+    for (INTN x = 0; x < WArea && (x + PosX) < Top.GetWidth(); ++x) {
       //------
       // test compAlpha = 255; TopAlpha = 0 -> only Comp, TopAplha = 255 -> only Top
-      TopAlpha = TopImage.GetPixel(x-PosX, y-PosY).Reserved & 0xFF; //0, 255
-      CompAlpha = CompPtr->Reserved & 0xFF; //255
-      RevAlpha = 255 - TopAlpha; //2<<8; 255, 0
-      TempAlpha = CompAlpha * RevAlpha; //2<<16; 255*255, 0
+      UINT32 TopAlpha = Top.GetPixel(x + PosX, y + PosY).Reserved & 0xFF; //0, 255
+      UINT32 CompAlpha = CompPtr->Reserved & 0xFF; //255
+      UINT32 RevAlpha = 255 - TopAlpha; //2<<8; 255, 0
+      UINT32 TempAlpha = CompAlpha * RevAlpha; //2<<16; 255*255, 0
       TopAlpha *= 255; //2<<16; 0, 255*255
-      FinalAlpha = TopAlpha + TempAlpha; //2<<16; 255*255, 255*255
+      UINT32 FinalAlpha = TopAlpha + TempAlpha; //2<<16; 255*255, 255*255
 //final alpha =(1-(1-x)*(1-y)) =(255*255-(255-topA)*(255-compA))/255 = topA+compA*(1-topA)
 
       if (FinalAlpha != 0) {
-        Temp = (CompPtr->Blue * TempAlpha) + (TopImage.GetPixel(x-PosX, y-PosY).Blue * TopAlpha);
+        UINT32 Temp = (CompPtr->Blue * TempAlpha) + (Top.GetPixel(x + PosX, y + PosY).Blue * TopAlpha);
         CompPtr->Blue = (UINT8)(Temp / FinalAlpha);
 
-        Temp = (CompPtr->Green * TempAlpha) + (TopImage.GetPixel(x-PosX, y-PosY).Green * TopAlpha);
+        Temp = (CompPtr->Green * TempAlpha) + (Top.GetPixel(x + PosX, y + PosY).Green * TopAlpha);
         CompPtr->Green = (UINT8)(Temp / FinalAlpha);
 
-        Temp = (CompPtr->Red * TempAlpha) + (TopImage.GetPixel(x-PosX, y-PosY).Red * TopAlpha);
+        Temp = (CompPtr->Red * TempAlpha) + (Top.GetPixel(x + PosX, y + PosY).Red * TopAlpha);
         CompPtr->Red = (UINT8)(Temp / FinalAlpha);
       }
 
@@ -526,6 +563,13 @@ void XImage::Draw(INTN x, INTN y, float scale, bool Opaque)
     return;
   }
 
+  if (x < 0) {
+    x = 0;
+  }
+  if (y < 0) {
+    y = 0;
+  }
+
   XImage Top(*this, scale); //can accept 0 as scale
   XImage Background(Width, Height);
   UINTN AreaWidth = (x + Width > (UINTN)UGAWidth) ? (UGAWidth - x) : Width;
@@ -533,32 +577,7 @@ void XImage::Draw(INTN x, INTN y, float scale, bool Opaque)
   Background.GetArea(x, y, AreaWidth, AreaHeight); //it will resize the Background image
   Background.Compose(0, 0, Top, Opaque);
   Background.DrawWithoutCompose(x, y);
-#if 0
-  // prepare protocols
-  EFI_STATUS Status;
-  EFI_GUID UgaDrawProtocolGuid = EFI_UGA_DRAW_PROTOCOL_GUID;
-  EFI_UGA_DRAW_PROTOCOL *UgaDraw = NULL;
-  EFI_GUID GraphicsOutputProtocolGuid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
-  EFI_GRAPHICS_OUTPUT_PROTOCOL *GraphicsOutput = NULL;
 
-  Status = EfiLibLocateProtocol(&GraphicsOutputProtocolGuid, (VOID **)&GraphicsOutput);
-  if (EFI_ERROR(Status)) {
-    GraphicsOutput = NULL;
-    Status = EfiLibLocateProtocol(&UgaDrawProtocolGuid, (VOID **)&UgaDraw);
-    if (EFI_ERROR(Status))
-      UgaDraw = NULL;
-  }
-  //output combined image
-  if (GraphicsOutput != NULL) {
-    GraphicsOutput->Blt(GraphicsOutput, Background.GetPixelPtr(0, 0),
-      EfiBltBufferToVideo,
-      0, 0, x, y, AreaWidth, AreaHeight, AreaWidth*sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
-  }
-  else if (UgaDraw != NULL) {
-    UgaDraw->Blt(UgaDraw, (EFI_UGA_PIXEL *)Background.GetPixelPtr(0, 0), EfiUgaBltBufferToVideo,
-      0, 0, x, y, AreaWidth, AreaHeight, AreaWidth*sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
-  }
-#endif
 }
 
 void XImage::DrawOnBack(INTN XPos, INTN YPos, const XImage& Plate)
@@ -589,6 +608,7 @@ EFI_STATUS XImage::LoadXImage(EFI_FILE *BaseDir, const wchar_t* LIconName)
   return LoadXImage(BaseDir, XStringW().takeValueFrom(LIconName));
 }
 //dont call this procedure for SVG theme BaseDir == NULL?
+//it can be used for other files
 EFI_STATUS XImage::LoadXImage(EFI_FILE *BaseDir, const XStringW& IconName)
 {
   EFI_STATUS      Status = EFI_NOT_FOUND;
@@ -681,6 +701,10 @@ void XImage::DummyImage(IN UINTN PixelSize)
   }
 }
 
+void XImage::Copy(XImage* Image)
+{
+  CopyRect(*Image, 0, 0);
+}
 void XImage::CopyRect(const XImage& Image, INTN XPos, INTN YPos)
 {
   for (INTN y = 0; y < GetHeight() && (y + YPos) < Image.GetHeight(); ++y) {
@@ -718,3 +742,34 @@ EG_IMAGE* XImage::ToEGImage()
   CopyMem(&Tmp->PixelData[0], &PixelData[0], GetSizeInBytes());
   return Tmp;
 }
+
+//
+// Load an image from a .icns file
+//
+EFI_STATUS XImage::LoadIcns(IN EFI_FILE_HANDLE BaseDir, IN CONST CHAR16 *FileName, IN UINTN PixelSize)
+{
+  if (GlobalConfig.TextOnly)      // skip loading if it's not used anyway
+    return EFI_SUCCESS;
+  if (BaseDir) {
+    EFI_STATUS  Status = EFI_NOT_FOUND;
+    UINT8           *FileData = NULL;
+    UINTN           FileDataLength = 0;
+    //TODO - make XImage
+    EG_IMAGE        *NewImage;
+
+    // load file
+    Status = egLoadFile(BaseDir, FileName, &FileData, &FileDataLength);
+    if (EFI_ERROR(Status)) {
+      return Status;
+    }
+
+    // decode it
+    NewImage = egDecodeICNS(FileData, FileDataLength, PixelSize, TRUE);
+    Status = FromEGImage(NewImage);
+    FreePool(FileData);
+    return Status;
+
+  }
+  return EFI_NOT_FOUND;
+}
+
